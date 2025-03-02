@@ -22,11 +22,12 @@ interface UserInfo {
   bio?: string | null;
 }
 
-export default function UserProfilePage({
+export default async function UserProfilePage({
   params,
 }: UserProfilePageProps) {
-  // Access params directly - don't use React.use here
-  const { organizationId, userId } = params;
+  // Access params properly in async component
+  const organizationId = params.organizationId;
+  const userId = params.userId;
   
   const [currentUser, setCurrentUser] = useState<UserInfo | null>(null);
   const [profileUser, setProfileUser] = useState<UserInfo | null>(null);

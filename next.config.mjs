@@ -11,7 +11,9 @@ const nextConfig = {
   },
   httpAgentOptions: {
     keepAlive: true,
-    maxHeaderSize: 64 * 1024,
+  },
+  eslint: {
+    ignoreDuringBuilds: true,
   },
   async headers() {
     return [

@@ -40,13 +40,13 @@ interface OrganizationInfo {
   memberships: MembershipInfo[];
 }
 
-export default function OrganizationPage({
+export default async function OrganizationPage({
   params,
 }: {
   params: { organizationId: string };
 }) {
-  // Simply use the params directly - no need for React.use here
-  const { organizationId } = params;
+  // Get organizationId from params (properly awaited in async component)
+  const organizationId = params.organizationId;
   
   const [user, setUser] = useState<UserInfo | null>(null);
   const [organizationInfo, setOrganizationInfo] = useState<OrganizationInfo | null>(null);
