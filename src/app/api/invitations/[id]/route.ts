@@ -5,7 +5,7 @@ import { Role } from "@prisma/client";
 
 export async function DELETE(
   req: Request,
-  context: { params: { id: string } }
+  { params }: { params: { id: string } }
 ) {
   try {
     const user = await getCurrentUser();
@@ -17,7 +17,9 @@ export async function DELETE(
       );
     }
 
-    const invitationId = context.params.id;
+    // Next.js 15: params are now Promises that need to be awaited
+    const resolvedParams = await params;
+    const invitationId = resolvedParams.id;
 
     // Find the invitation
     const invitation = await db.invitation.findUnique({
