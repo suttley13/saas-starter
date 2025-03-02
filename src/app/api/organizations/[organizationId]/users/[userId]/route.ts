@@ -4,7 +4,7 @@ import { getCurrentUser } from "@/lib/auth/auth";
 
 export async function GET(
   request: Request,
-  { params }: { params: { organizationId: string; userId: string } }
+  context: { params: Promise<{ organizationId: string; userId: string }> }
 ) {
   try {
     const user = await getCurrentUser();
@@ -13,9 +13,8 @@ export async function GET(
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
 
-    // Next.js 15: params are now Promises that need to be awaited
-    const resolvedParams = await params;
-    const { organizationId, userId } = resolvedParams;
+    const params = await context.params;
+    const { organizationId, userId } = params;
 
     // Get the organization
     const organization = await db.organization.findUnique({
