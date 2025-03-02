@@ -4,12 +4,12 @@ import Link from "next/link";
 import { SignUpForm } from "@/components/auth/sign-up-form";
 import { redirect, useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 
 // Client components don't use metadata export directly
 // We'll set the title in useEffect
 
-export default function SignUpPage() {
+function SignUpContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isLoading, setIsLoading] = useState(true);
@@ -85,6 +85,18 @@ export default function SignUpPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function SignUpPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-pulse">Loading sign-up page...</div>
+      </div>
+    }>
+      <SignUpContent />
+    </Suspense>
   );
 }
  

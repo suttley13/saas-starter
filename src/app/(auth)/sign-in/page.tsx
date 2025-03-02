@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { SignInForm } from "@/components/auth/sign-in-form";
@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 // Metadata must be configured differently for client components
 // We'll handle the title in the component itself
 
-export default function SignInPage() {
+function SignInContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
@@ -85,5 +85,17 @@ export default function SignInPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function SignInPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-pulse">Loading sign-in page...</div>
+      </div>
+    }>
+      <SignInContent />
+    </Suspense>
   );
 } 
