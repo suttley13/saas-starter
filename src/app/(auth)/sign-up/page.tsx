@@ -3,17 +3,20 @@ import { SignUpForm } from "@/components/auth/sign-up-form";
 import { getCurrentUser } from "@/lib/auth/auth";
 import { redirect } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import type { Metadata } from "next";
 
-export const metadata = {
+export const metadata: Metadata = {
   title: "Sign Up",
   description: "Create a new account",
 };
 
-interface SignUpPageProps {
-  searchParams?: { [key: string]: string | string[] | undefined };
-}
+// Define the props type correctly for Next.js page components
+type PageProps = {
+  params: { [key: string]: string | string[] };
+  searchParams: { [key: string]: string | string[] | undefined };
+};
 
-export default async function SignUpPage({ searchParams }: SignUpPageProps) {
+export default async function SignUpPage({ searchParams }: PageProps) {
   const user = await getCurrentUser();
   const orgName = searchParams?.orgName as string | undefined;
   const callbackUrl = searchParams?.callbackUrl as string | undefined;
