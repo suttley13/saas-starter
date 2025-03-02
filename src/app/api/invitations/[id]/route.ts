@@ -1,11 +1,11 @@
-import { NextResponse, NextRequest } from "next/server";
+import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth/auth";
 import { Role } from "@prisma/client";
 
 export async function DELETE(
-  request: NextRequest,
-  context: { params: { id: string } }
+  request: Request,
+  { params }: { params: { id: string } }
 ) {
   try {
     const user = await getCurrentUser();
@@ -17,7 +17,9 @@ export async function DELETE(
       );
     }
 
-    const invitationId = context.params.id;
+    // Next.js 15: params are now Promises that need to be awaited
+    const resolvedParams = await params;
+    const invitationId = resolvedParams.id;
 
     // Find the invitation
     const invitation = await db.invitation.findUnique({
