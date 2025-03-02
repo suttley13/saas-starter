@@ -5,7 +5,7 @@ import { Role } from "@prisma/client";
 
 export async function DELETE(
   req: Request,
-  { params }: { params: { id: string } }
+  context: { params: { id: string } }
 ) {
   try {
     const user = await getCurrentUser();
@@ -17,7 +17,7 @@ export async function DELETE(
       );
     }
 
-    const invitationId = params.id;
+    const invitationId = context.params.id;
 
     // Find the invitation
     const invitation = await db.invitation.findUnique({
