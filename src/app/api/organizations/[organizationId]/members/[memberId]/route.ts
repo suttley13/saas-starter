@@ -5,7 +5,7 @@ import { Role } from "@prisma/client";
 
 export async function DELETE(
   request: Request,
-  { params }: { params: { organizationId: string; memberId: string } }
+  context: { params: Promise<{ organizationId: string; memberId: string }> }
 ) {
   try {
     const user = await getCurrentUser();
@@ -14,69 +14,59 @@ export async function DELETE(
       return new NextResponse("Unauthorized", { status: 401 });
     }
 
-    // Next.js 15: params are now Promises that need to be awaited
-    const resolvedParams = await params;
-    const { organizationId, memberId } = resolvedParams;
+    const params = await context.params;
+    const { organizationId, memberId } = params;
 
-    // Find the organization
-    const organization = await db.organization.findUnique({
+    // Check if user is a member of the organization
+    const membership = await db.membership.findFirst({
       where: {
-        id: organizationId,
-      },
-      include: {
-        memberships: true,
+        userId: user.id,
+        organizationId,
       },
     });
 
-    if (!organization) {
-      return new NextResponse("Organization not found", { status: 404 });
-    }
-
-    // Check if user is a member of the organization
-    const currentUserMembership = organization.memberships.find(
-      (member) => member.userId === user.id
-    );
-
-    if (!currentUserMembership) {
-      return new NextResponse("You are not a member of this organization", { status: 403 });
+    if (!membership) {
+      return new NextResponse("You are not a member of this organization", {
+        status: 403,
+      });
     }
 
     // Check if user is an admin (only admins can remove members)
-    if (currentUserMembership.role !== Role.ADMIN) {
-      return new NextResponse("Only admins can remove members", { status: 403 });
+    if (membership.role !== Role.ADMIN) {
+      return new NextResponse("Only admins can remove members", {
+        status: 403,
+      });
     }
 
-    // Find the membership to be removed
-    const membershipToRemove = await db.membership.findUnique({
+    // Check if member exists
+    const memberToRemove = await db.membership.findFirst({
       where: {
         id: memberId,
+        organizationId,
       },
     });
 
-    if (!membershipToRemove) {
-      return new NextResponse("Membership not found", { status: 404 });
+    if (!memberToRemove) {
+      return new NextResponse("Member not found", { status: 404 });
     }
 
-    // Check if the membership belongs to this organization
-    if (membershipToRemove.organizationId !== organizationId) {
-      return new NextResponse("This membership does not belong to the specified organization", { status: 400 });
+    // Cannot remove yourself
+    if (memberToRemove.userId === user.id) {
+      return new NextResponse("You cannot remove yourself from the organization", {
+        status: 400,
+      });
     }
 
-    // Check if trying to remove the organization owner
-    if (membershipToRemove.userId === organization.ownerId) {
-      return new NextResponse("Cannot remove the organization owner", { status: 403 });
-    }
-
-    // Delete the membership
+    // Delete membership
     await db.membership.delete({
       where: {
         id: memberId,
       },
     });
 
-    return new NextResponse(null, { status: 200 });
+    return new NextResponse(null, { status: 204 });
   } catch (error) {
-    console.error("[MEMBER_DELETE]", error);
-    return new NextResponse("Internal error", { status: 500 });
+    console.error("Remove member error:", error);
+    return new NextResponse("Internal server error", { status: 500 });
   }
 } 
