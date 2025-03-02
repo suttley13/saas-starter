@@ -13,14 +13,14 @@ export const metadata = {
 };
 
 interface InviteMembersPageProps {
-  params: { organizationId: string };
+  params: Promise<{ organizationId: string }>;
 }
 
 export default async function InviteMembersPage({
   params,
 }: InviteMembersPageProps) {
-  // Make sure to await params
-  const { organizationId } = await Promise.resolve(params);
+  const resolvedParams = await params;
+  const { organizationId } = resolvedParams;
   const user = await getCurrentUser();
 
   if (!user) {
