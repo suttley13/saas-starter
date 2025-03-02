@@ -1,6 +1,6 @@
 "use client";
 
-import { redirect } from "next/navigation";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import React, { useEffect, useState } from "react";
 
@@ -22,10 +22,11 @@ interface UserInfo {
   bio?: string | null;
 }
 
-export default async function UserProfilePage({
+export default function UserProfilePage({
   params,
 }: UserProfilePageProps) {
-  // Access params properly in async component
+  const router = useRouter();
+  // Access params directly in client component
   const organizationId = params.organizationId;
   const userId = params.userId;
   
@@ -45,7 +46,7 @@ export default async function UserProfilePage({
         const userData = await userResponse.json();
         
         if (!userData?.user) {
-          window.location.href = "/sign-in";
+          router.push("/sign-in");
           return;
         }
         
@@ -55,7 +56,7 @@ export default async function UserProfilePage({
         const profileResponse = await fetch(`/api/organizations/${organizationId}/users/${userId}`);
         
         if (!profileResponse.ok) {
-          window.location.href = `/organizations/${organizationId}`;
+          router.push(`/organizations/${organizationId}`);
           return;
         }
         
@@ -71,7 +72,7 @@ export default async function UserProfilePage({
     }
     
     loadData();
-  }, [organizationId, userId]);
+  }, [organizationId, userId, router]);
 
   if (loading || !currentUser || !profileUser) {
     return (
