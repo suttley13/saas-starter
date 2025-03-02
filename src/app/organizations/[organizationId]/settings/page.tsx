@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import { Suspense } from "react";
 
 import { Button } from "@/components/ui/button";
 import { getCurrentUser } from "@/lib/auth/auth";
@@ -12,14 +13,14 @@ export const metadata = {
 };
 
 interface OrganizationSettingsPageProps {
-  params: { organizationId: string };
+  params: Promise<{ organizationId: string }>;
 }
 
 export default async function OrganizationSettingsPage({
   params,
 }: OrganizationSettingsPageProps) {
   // Make sure to await params
-  const { organizationId } = await Promise.resolve(params);
+  const { organizationId } = await params;
   const user = await getCurrentUser();
 
   if (!user) {
@@ -68,13 +69,15 @@ export default async function OrganizationSettingsPage({
         </div>
 
         {/* Use our client component for all the interactive settings */}
-        <OrganizationSettingsForm 
-          organization={{
-            id: organization.id,
-            name: organization.name,
-            slug: organization.slug,
-          }}
-        />
+        <Suspense fallback={<div>Loading organization settings...</div>}>
+          <OrganizationSettingsForm 
+            organization={{
+              id: organization.id,
+              name: organization.name,
+              slug: organization.slug,
+            }}
+          />
+        </Suspense>
       </div>
     </div>
   );
