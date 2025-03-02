@@ -3,15 +3,9 @@ import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth/auth";
 import { Role } from "@prisma/client";
 
-type Props = {
-  params: {
-    id: string;
-  };
-};
-
 export async function DELETE(
   request: Request,
-  props: Props
+  { params }: { params: { id: string } }
 ) {
   try {
     const user = await getCurrentUser();
@@ -23,7 +17,7 @@ export async function DELETE(
       );
     }
 
-    const invitationId = props.params.id;
+    const invitationId = params.id;
 
     // Find the invitation
     const invitation = await db.invitation.findUnique({
