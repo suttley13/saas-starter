@@ -1,6 +1,6 @@
 "use client";
 
-import { redirect } from "next/navigation";
+import { redirect, useRouter } from "next/navigation";
 import Link from "next/link";
 import React, { useEffect, useState } from "react";
 import { Toaster } from "sonner";
@@ -40,74 +40,76 @@ interface OrganizationInfo {
   memberships: MembershipInfo[];
 }
 
-export default async function OrganizationPage({
-  params,
-}: {
+interface OrganizationPageProps {
   params: { organizationId: string };
-}) {
-  // Get organizationId from params (properly awaited in async component)
-  const organizationId = params.organizationId;
-  
+}
+
+export default function OrganizationPage({
+  params,
+}: OrganizationPageProps) {
+  const router = useRouter();
+  const { organizationId } = params;
+  const [organization, setOrganization] = useState<OrganizationInfo | null>(null);
   const [user, setUser] = useState<UserInfo | null>(null);
-  const [organizationInfo, setOrganizationInfo] = useState<OrganizationInfo | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    async function loadData() {
+    const fetchData = async () => {
       try {
-        setLoading(true);
-        
-        // Fetch current user
+        // Fetch user data first
         const userResponse = await fetch("/api/auth/session");
         const userData = await userResponse.json();
         
         if (!userData?.user) {
-          window.location.href = "/sign-in";
+          router.push("/sign-in");
           return;
         }
         
         setUser(userData.user);
-        
-        // Fetch organization data
+
+        // Then fetch organization data
         const orgResponse = await fetch(`/api/organizations/${organizationId}`);
-        
         if (!orgResponse.ok) {
-          window.location.href = "/dashboard";
-          return;
+          throw new Error('Failed to fetch organization');
         }
-        
         const orgData = await orgResponse.json();
-        setOrganizationInfo(orgData);
-      } catch (error) {
-        console.error("Error loading data:", error);
+        setOrganization(orgData);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'An error occurred');
       } finally {
         setLoading(false);
       }
-    }
-    
-    loadData();
-  }, [organizationId]);
+    };
 
-  if (loading || !user || !organizationInfo) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <p>Loading...</p>
-      </div>
-    );
+    fetchData();
+  }, [organizationId, router]);
+
+  if (loading) {
+    return <div>Loading...</div>;
+  }
+
+  if (error) {
+    return <div>Error: {error}</div>;
+  }
+
+  if (!organization || !user) {
+    return <div>Organization not found</div>;
   }
 
   // Check if user is a member of this organization
-  const isMember = organizationInfo.memberships.some(
+  const isMember = organization.memberships.some(
     (member) => member.userId === user.id
   );
 
   if (!isMember) {
-    window.location.href = "/dashboard";
-    return null;
+    return (
+      <div>You are not a member of this organization</div>
+    );
   }
 
   // Get current user's membership to check if they're an admin
-  const currentUserMembership = organizationInfo.memberships.find(
+  const currentUserMembership = organization.memberships.find(
     (member) => member.userId === user.id
   );
   
@@ -118,7 +120,7 @@ export default async function OrganizationPage({
       <Toaster position="top-right" />
       <div className="container max-w-4xl mx-auto px-4">
         <div className="flex items-center justify-between mb-8">
-          <h1 className="text-3xl font-bold text-slate-800">{organizationInfo.name}</h1>
+          <h1 className="text-3xl font-bold text-slate-800">{organization.name}</h1>
           <div className="flex gap-3">
             {!isAdmin && (
               <Link href="/settings/profile">
@@ -143,17 +145,17 @@ export default async function OrganizationPage({
               <div>
                 <h2 className="text-xl font-semibold text-slate-800">Organization Details</h2>
                 <p className="mt-2 text-slate-600">
-                  Slug: {organizationInfo.slug}
+                  Slug: {organization.slug}
                 </p>
                 <p className="text-slate-600">
-                  Created: {new Date(organizationInfo.createdAt).toLocaleDateString()}
+                  Created: {new Date(organization.createdAt).toLocaleDateString()}
                 </p>
                 <p className="text-slate-600">
-                  Members: {organizationInfo.memberships.length}
+                  Members: {organization.memberships.length}
                 </p>
               </div>
               {isAdmin && (
-                <Link href={`/organizations/${organizationInfo.id}/settings`}>
+                <Link href={`/organizations/${organization.id}/settings`}>
                   <Button variant="outline" className="border-blue-200 text-blue-700 hover:bg-blue-50 hover:text-blue-800 hover:border-blue-300">
                     Organization Settings
                   </Button>
@@ -166,7 +168,7 @@ export default async function OrganizationPage({
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-semibold text-slate-800">Team Members</h2>
               {isAdmin && (
-                <Link href={`/organizations/${organizationInfo.id}/invite`}>
+                <Link href={`/organizations/${organization.id}/invite`}>
                   <Button size="sm" className="bg-blue-600 hover:bg-blue-700 transition-colors">
                     Invite Members
                   </Button>
@@ -176,13 +178,13 @@ export default async function OrganizationPage({
             
             <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
               <div className="space-y-4">
-                {organizationInfo.memberships.length === 0 ? (
+                {organization.memberships.length === 0 ? (
                   <p className="text-slate-600">No team members found.</p>
                 ) : (
-                  organizationInfo.memberships.map((membership) => (
+                  organization.memberships.map((membership) => (
                     <Link 
                       key={membership.id} 
-                      href={`/organizations/${organizationInfo.id}/users/${membership.userId}`}
+                      href={`/organizations/${organization.id}/users/${membership.userId}`}
                       className={`flex items-center justify-between p-3 rounded-lg hover:bg-slate-50 block ${
                         membership.userId === user.id ? 'border-l-4 border-blue-500 pl-2' : ''
                       }`}
@@ -205,11 +207,11 @@ export default async function OrganizationPage({
                         </div>
                       </div>
                       
-                      {isAdmin && membership.userId !== user.id && membership.userId !== organizationInfo.ownerId && (
+                      {isAdmin && membership.userId !== user.id && membership.userId !== organization.ownerId && (
                         <div onClick={(e) => e.stopPropagation()}>
                           <MemberActions 
                             memberId={membership.id} 
-                            organizationId={organizationInfo.id}
+                            organizationId={organization.id}
                             memberName={membership.user.displayName || membership.user.email}
                           />
                         </div>
@@ -221,7 +223,7 @@ export default async function OrganizationPage({
               
               {isAdmin && (
                 <div className="mt-6">
-                  <Link href={`/organizations/${organizationInfo.id}/invite`}>
+                  <Link href={`/organizations/${organization.id}/invite`}>
                     <Button className="bg-blue-600 hover:bg-blue-700 transition-colors">
                       Invite More Members
                     </Button>
