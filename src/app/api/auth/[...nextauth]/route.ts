@@ -7,4 +7,4 @@ const handler = NextAuth(authOptions);
 // Export the handlers
 export const GET = handler;
 export const POST = handler;
-export { handler as auth }; 
+// export { handler as auth }; // This export is not valid in Next.js 15 
