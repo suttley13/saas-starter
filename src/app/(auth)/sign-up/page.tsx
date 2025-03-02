@@ -29,7 +29,7 @@ function SignUpContent() {
         const data = await response.json();
         
         if (data?.user) {
-          router.push("/dashboard");
+          router.push(callbackUrl || "/dashboard");
         } else {
           setIsLoading(false);
         }
@@ -40,7 +40,7 @@ function SignUpContent() {
     }
     
     checkAuth();
-  }, [router]);
+  }, [router, callbackUrl]);
 
   // Show loading state while checking authentication
   if (isLoading) {
