@@ -13,14 +13,14 @@ export const metadata = {
 };
 
 interface AcceptInvitationPageProps {
-  params: { token: string };
+  params: Promise<{ token: string }>;
 }
 
 export default async function AcceptInvitationPage({
   params,
 }: AcceptInvitationPageProps) {
-  // Make sure to await params
-  const { token } = await Promise.resolve(params);
+  const resolvedParams = await params;
+  const { token } = resolvedParams;
   const user = await getCurrentUser();
 
   // Check if the invitation exists and is valid before redirecting
