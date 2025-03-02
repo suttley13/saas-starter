@@ -10,13 +10,12 @@ export const metadata: Metadata = {
   description: "Create a new account",
 };
 
-// Define the props type correctly for Next.js page components
-type PageProps = {
-  params: { [key: string]: string | string[] };
-  searchParams: { [key: string]: string | string[] | undefined };
-};
-
-export default async function SignUpPage({ searchParams }: PageProps) {
+// For Next.js 15, we use a simpler approach without custom types
+export default async function SignUpPage({ 
+  searchParams 
+}: { 
+  searchParams?: Record<string, string | string[] | undefined> 
+}) {
   const user = await getCurrentUser();
   const orgName = searchParams?.orgName as string | undefined;
   const callbackUrl = searchParams?.callbackUrl as string | undefined;
