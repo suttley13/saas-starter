@@ -1,0 +1,304 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
+import { format } from "date-fns";
+import emailjs from "@emailjs/browser";
+
+// Define the invitation schema
+const invitationSchema = z.object({
+  email: z.string().email({ message: "Please enter a valid email address" }),
+  role: z.enum(["ADMIN", "MEMBER"], { 
+    message: "Please select a valid role" 
+  }),
+});
+
+// Infer the type from the schema
+type InvitationFormValues = z.infer<typeof invitationSchema>;
+
+// Define the component props
+interface InviteMembersFormProps {
+  organizationId: string;
+}
+
+// Define the invitation type
+type Invitation = {
+  id: string;
+  email: string;
+  role: "ADMIN" | "MEMBER";
+  expires: string;
+  createdAt: string;
+};
+
+export function InviteMembersForm({ organizationId }: InviteMembersFormProps) {
+  const [isLoading, setIsLoading] = useState(false);
+  const [isCancelling, setIsCancelling] = useState<string | null>(null);
+  const [invitations, setInvitations] = useState<Invitation[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [organizationName, setOrganizationName] = useState<string>("");
+
+  // Initialize form with react-hook-form
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors },
+  } = useForm<InvitationFormValues>({
+    resolver: zodResolver(invitationSchema),
+    defaultValues: {
+      email: "",
+      role: "MEMBER",
+    },
+  });
+
+  // Load existing invitations and organization info when the component mounts
+  useEffect(() => {
+    fetchInvitations();
+    fetchOrganizationDetails();
+  }, [organizationId]);
+
+  // Fetch organization details
+  const fetchOrganizationDetails = async () => {
+    try {
+      const response = await fetch(`/api/organizations/${organizationId}`);
+      
+      if (!response.ok) {
+        throw new Error("Failed to fetch organization details");
+      }
+      
+      const data = await response.json();
+      setOrganizationName(data.name || "");
+    } catch (error) {
+      console.error("Error fetching organization details:", error);
+    }
+  };
+
+  // Fetch invitations from the API
+  const fetchInvitations = async () => {
+    try {
+      const response = await fetch(`/api/invitations?organizationId=${organizationId}`);
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Failed to fetch invitations");
+      }
+      
+      const data = await response.json();
+      setInvitations(data.invitations);
+    } catch (error) {
+      console.error("Error fetching invitations:", error);
+      setError(error instanceof Error ? error.message : "An error occurred");
+    }
+  };
+
+  // Cancel an invitation
+  const cancelInvitation = async (invitationId: string) => {
+    setIsCancelling(invitationId);
+    
+    try {
+      const response = await fetch(`/api/invitations/${invitationId}`, {
+        method: "DELETE",
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Failed to cancel invitation");
+      }
+      
+      // Remove the invitation from the state
+      setInvitations(invitations.filter(invitation => invitation.id !== invitationId));
+      toast.success("Invitation cancelled successfully");
+    } catch (error) {
+      console.error("Error cancelling invitation:", error);
+      toast.error(error instanceof Error ? error.message : "Failed to cancel invitation");
+    } finally {
+      setIsCancelling(null);
+    }
+  };
+
+  // Send email directly from client
+  const sendInvitationEmail = async (email: string, token: string) => {
+    try {
+      // Use window.location.origin to get the current domain and port dynamically
+      // This ensures the link works for whatever server is currently running
+      const baseUrl = window.location.origin;
+      const inviteLink = `${baseUrl}/invitations/${token}`;
+      
+      const templateParams = {
+        to_email: email,
+        subject: `You're invited to join ${organizationName}`,
+        organization_name: organizationName,
+        invite_link: inviteLink
+      };
+      
+      const serviceId = process.env.NEXT_PUBLIC_EMAILJS_SERVICE_ID || "";
+      const templateId = process.env.NEXT_PUBLIC_EMAILJS_INVITATION_TEMPLATE_ID || "";
+      const publicKey = process.env.NEXT_PUBLIC_EMAILJS_PUBLIC_KEY || "";
+      
+      console.log("EmailJS Config:", { 
+        serviceId, 
+        templateId, 
+        publicKey: publicKey ? "[PRESENT]" : "[MISSING]", 
+        templateParams 
+      });
+      
+      const response = await emailjs.send(
+        serviceId,
+        templateId,
+        templateParams,
+        publicKey
+      );
+      
+      console.log("Email sent successfully:", response);
+      return true;
+    } catch (error) {
+      console.error("Error sending email via EmailJS:", error);
+      toast.error("Invitation created but email failed to send. Please try again.");
+      return false;
+    }
+  };
+
+  // Handle form submission
+  const onSubmit = async (data: InvitationFormValues) => {
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      const response = await fetch("/api/invitations", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          ...data,
+          organizationId,
+        }),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Failed to send invitation");
+      }
+      
+      const responseData = await response.json();
+      
+      // Send the email from the client side
+      if (responseData.invitation) {
+        await sendInvitationEmail(data.email, responseData.invitation.token);
+      }
+      
+      // Reset form and show success message
+      reset();
+      toast.success("Invitation sent successfully");
+      
+      // Refresh invitations list
+      fetchInvitations();
+    } catch (error) {
+      console.error("Error sending invitation:", error);
+      setError(error instanceof Error ? error.message : "An error occurred");
+      toast.error(error instanceof Error ? error.message : "Failed to send invitation");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <div className="space-y-8">
+      <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h2 className="text-xl font-semibold text-slate-800 mb-4">Invite New Members</h2>
+        <p className="text-slate-600 mb-6">
+          Invite new members to join your organization.
+        </p>
+        
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              Email Address
+            </label>
+            <input
+              {...register("email")}
+              type="email"
+              placeholder="email@example.com"
+              className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm ring-offset-white file:border-0 file:bg-transparent file:text-sm file:font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2"
+            />
+            {errors.email && (
+              <p className="mt-1 text-sm text-red-600">{errors.email.message}</p>
+            )}
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              Role
+            </label>
+            <select
+              {...register("role")}
+              className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm ring-offset-white file:border-0 file:bg-transparent file:text-sm file:font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2"
+            >
+              <option value="MEMBER">Member</option>
+              <option value="ADMIN">Admin</option>
+            </select>
+            {errors.role && (
+              <p className="mt-1 text-sm text-red-600">{errors.role.message}</p>
+            )}
+          </div>
+          
+          {error && (
+            <div className="p-3 rounded-md bg-red-50 border border-red-100 text-red-800 text-sm">
+              {error}
+            </div>
+          )}
+          
+          <Button 
+            type="submit" 
+            className="bg-blue-600 hover:bg-blue-700 transition-colors mt-2"
+            disabled={isLoading}
+          >
+            {isLoading ? "Sending..." : "Send Invitation"}
+          </Button>
+        </form>
+      </div>
+
+      <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h2 className="text-xl font-semibold text-slate-800 mb-4">Pending Invitations</h2>
+        
+        {invitations.length === 0 ? (
+          <p className="text-slate-600 mb-4">
+            No pending invitations.
+          </p>
+        ) : (
+          <div className="space-y-4">
+            {invitations.map((invitation) => (
+              <div 
+                key={invitation.id}
+                className="flex flex-col sm:flex-row sm:items-center justify-between p-3 border border-slate-100 rounded-lg hover:bg-slate-50"
+              >
+                <div>
+                  <p className="font-medium text-slate-800">{invitation.email}</p>
+                  <div className="flex flex-col sm:flex-row sm:gap-4 text-sm text-slate-500">
+                    <span>Role: {invitation.role}</span>
+                    {invitation.expires && (
+                      <span>Expires: {format(new Date(invitation.expires), "MMM d, yyyy")}</span>
+                    )}
+                  </div>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-2 sm:mt-0 border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 hover:border-red-300"
+                  onClick={() => cancelInvitation(invitation.id)}
+                  disabled={isCancelling === invitation.id}
+                >
+                  {isCancelling === invitation.id ? "Cancelling..." : "Cancel"}
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+} 
