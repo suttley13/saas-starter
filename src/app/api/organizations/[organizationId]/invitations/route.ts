@@ -13,7 +13,7 @@ const inviteSchema = z.object({
 
 export async function POST(
   req: Request,
-  { params }: { params: { organizationId: string } }
+  context: { params: Promise<{ organizationId: string }> }
 ) {
   try {
     const user = await getCurrentUser();
@@ -25,95 +25,95 @@ export async function POST(
       );
     }
 
-    const organizationId = params.organizationId;
+    const params = await context.params;
+    const { organizationId } = params;
 
     // Check if user is a member of the organization
-    const membership = await db.membership.findUnique({
+    const membership = await db.membership.findFirst({
       where: {
-        userId_organizationId: {
-          userId: user.id,
-          organizationId,
-        },
+        userId: user.id,
+        organizationId,
       },
     });
 
-    if (!membership || membership.role !== Role.ADMIN) {
+    if (!membership) {
       return NextResponse.json(
-        { message: "Forbidden: You don't have permission to invite members" },
+        { message: "You are not a member of this organization" },
+        { status: 403 }
+      );
+    }
+
+    // Check if user is an admin (only admins can send invitations)
+    if (membership.role !== Role.ADMIN) {
+      return NextResponse.json(
+        { message: "Only admins can send invitations" },
         { status: 403 }
       );
     }
 
     const body = await req.json();
-    const { email, role } = inviteSchema.parse(body);
+    const validatedData = inviteSchema.parse(body);
 
     // Check if user is already a member
-    const existingMember = await db.membership.findFirst({
+    const existingMembership = await db.membership.findFirst({
       where: {
-        organization: { id: organizationId },
-        user: { email },
+        organization: {
+          id: organizationId,
+        },
+        user: {
+          email: validatedData.email,
+        },
       },
     });
 
-    if (existingMember) {
+    if (existingMembership) {
       return NextResponse.json(
         { message: "User is already a member of this organization" },
-        { status: 409 }
+        { status: 400 }
       );
     }
 
-    // Check if invitation already exists
-    const existingInvitation = await db.invitation.findUnique({
+    // Check if there's already a pending invitation
+    const existingInvitation = await db.invitation.findFirst({
       where: {
-        email_organizationId: {
-          email,
-          organizationId,
-        },
+        organizationId,
+        email: validatedData.email,
       },
     });
 
     if (existingInvitation) {
       return NextResponse.json(
-        { message: "Invitation already sent to this email" },
-        { status: 409 }
-      );
-    }
-
-    // Create invitation
-    const token = randomUUID();
-    const expires = new Date();
-    expires.setDate(expires.getDate() + 7); // Expires in 7 days
-
-    const invitation = await db.invitation.create({
-      data: {
-        email,
-        role,
-        token,
-        expires,
-        organizationId,
-      },
-    });
-
-    // In a real application, you would send an email with the invitation link
-    // For now, we'll just return the invitation
-
-    return NextResponse.json(
-      { 
-        message: "Invitation sent successfully", 
-        invitation 
-      },
-      { status: 201 }
-    );
-  } catch (error) {
-    console.error("Invitation error:", error);
-    
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { message: "Invalid data", errors: error.errors },
+        { message: "An invitation has already been sent to this email" },
         { status: 400 }
       );
     }
-    
+
+    // Create invitation with token and expiration
+    const token = randomUUID();
+    const expires = new Date();
+    expires.setDate(expires.getDate() + 7); // Invitation expires in 7 days
+
+    const invitation = await db.invitation.create({
+      data: {
+        id: randomUUID(),
+        email: validatedData.email,
+        role: validatedData.role,
+        organizationId,
+        token,
+        expires,
+      },
+    });
+
+    return NextResponse.json(invitation, { status: 201 });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { message: "Invalid request data", errors: error.errors },
+        { status: 400 }
+      );
+    }
+
+    console.error("Create invitation error:", error);
     return NextResponse.json(
       { message: "Internal server error" },
       { status: 500 }
