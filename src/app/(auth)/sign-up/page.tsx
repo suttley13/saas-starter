@@ -1,28 +1,54 @@
+"use client";
+
 import Link from "next/link";
 import { SignUpForm } from "@/components/auth/sign-up-form";
-import { getCurrentUser } from "@/lib/auth/auth";
-import { redirect } from "next/navigation";
+import { redirect, useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import type { Metadata } from "next";
+import { useEffect, useState } from "react";
 
-export const metadata: Metadata = {
-  title: "Sign Up",
-  description: "Create a new account",
-};
+// Client components don't use metadata export directly
+// We'll set the title in useEffect
 
-// For Next.js 15, we use a simpler approach without custom types
-export default async function SignUpPage({ 
-  searchParams 
-}: { 
-  searchParams?: Record<string, string | string[] | undefined> 
-}) {
-  const user = await getCurrentUser();
-  const orgName = searchParams?.orgName as string | undefined;
-  const callbackUrl = searchParams?.callbackUrl as string | undefined;
+export default function SignUpPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const [isLoading, setIsLoading] = useState(true);
+  
+  const orgName = searchParams.get("orgName") || undefined;
+  const callbackUrl = searchParams.get("callbackUrl") || undefined;
   const isInvitation = callbackUrl?.includes('/invitations/');
 
-  if (user) {
-    redirect("/dashboard");
+  useEffect(() => {
+    // Set page title
+    document.title = "Sign Up | SaaS Starter";
+    
+    // Check authentication status on the client side
+    async function checkAuth() {
+      try {
+        const response = await fetch('/api/auth/session');
+        const data = await response.json();
+        
+        if (data?.user) {
+          router.push("/dashboard");
+        } else {
+          setIsLoading(false);
+        }
+      } catch (error) {
+        console.error("Error checking auth status:", error);
+        setIsLoading(false);
+      }
+    }
+    
+    checkAuth();
+  }, [router]);
+
+  // Show loading state while checking authentication
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-pulse">Loading...</div>
+      </div>
+    );
   }
 
   return (
