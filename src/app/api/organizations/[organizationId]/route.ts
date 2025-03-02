@@ -1,82 +1,24 @@
-import { NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/auth/auth";
+import { Role, Membership, Organization } from "@prisma/client";
 import { db } from "@/lib/db";
-import { Role } from "@prisma/client";
-
-export async function DELETE(
-  request: Request,
-  { params }: { params: { organizationId: string } }
-) {
-  try {
-    const user = await getCurrentUser();
-
-    if (!user) {
-      return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-    }
-
-    // Next.js 15: params are now Promises that need to be awaited
-    const resolvedParams = await params;
-    const { organizationId } = resolvedParams;
-
-    // Get the organization
-    const organization = await db.organization.findUnique({
-      where: {
-        id: organizationId,
-      },
-    });
-
-    if (!organization) {
-      return NextResponse.json(
-        { message: "Organization not found" },
-        { status: 404 }
-      );
-    }
-
-    // Check if the user is the owner
-    if (organization.ownerId !== user.id) {
-      return NextResponse.json(
-        { message: "Only the organization owner can delete it" },
-        { status: 403 }
-      );
-    }
-
-    // Delete the organization
-    await db.organization.delete({
-      where: {
-        id: organizationId,
-      },
-    });
-
-    return NextResponse.json({ message: "Organization deleted" });
-  } catch (error) {
-    console.error("[ORGANIZATION_DELETE]", error);
-    return NextResponse.json(
-      { message: "Internal server error" },
-      { status: 500 }
-    );
-  }
-}
+import { getCurrentUser } from "@/lib/auth/auth";
+import { NextResponse } from "next/server";
 
 export async function GET(
   request: Request,
-  { params }: { params: { organizationId: string } }
+  context: { params: Promise<{ organizationId: string }> }
 ) {
   try {
     const user = await getCurrentUser();
 
     if (!user) {
-      return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+      return new NextResponse("Unauthorized", { status: 401 });
     }
 
-    // Next.js 15: params are now Promises that need to be awaited
-    const resolvedParams = await params;
-    const { organizationId } = resolvedParams;
+    const params = await context.params;
+    const { organizationId } = params;
 
-    // Get the organization with members
     const organization = await db.organization.findUnique({
-      where: {
-        id: organizationId,
-      },
+      where: { id: organizationId },
       include: {
         memberships: {
           include: {
@@ -101,25 +43,79 @@ export async function GET(
       );
     }
 
-    // Check if the user is a member of this organization
-    const isMember = organization.memberships.some(
-      (member) => member.userId === user.id
+    const membership = organization.memberships.find(
+      (m: Membership) => m.userId === user.id
     );
 
-    if (!isMember) {
+    if (!membership) {
       return NextResponse.json(
         { message: "You are not a member of this organization" },
         { status: 403 }
       );
     }
 
-    // Return organization data
     return NextResponse.json(organization);
   } catch (error) {
     console.error("[ORGANIZATION_GET]", error);
-    return NextResponse.json(
-      { message: "Internal server error" },
-      { status: 500 }
+    return new NextResponse("Internal error", { status: 500 });
+  }
+}
+
+export async function DELETE(
+  request: Request,
+  context: { params: Promise<{ organizationId: string }> }
+) {
+  try {
+    const user = await getCurrentUser();
+
+    if (!user) {
+      return new NextResponse("Unauthorized", { status: 401 });
+    }
+
+    const params = await context.params;
+    const { organizationId } = params;
+
+    const organization = await db.organization.findUnique({
+      where: { id: organizationId },
+      include: {
+        memberships: true
+      }
+    });
+
+    if (!organization) {
+      return NextResponse.json(
+        { message: "Organization not found" },
+        { status: 404 }
+      );
+    }
+
+    const membership = organization.memberships.find(
+      (m: Membership) => m.userId === user.id
     );
+
+    if (!membership) {
+      return NextResponse.json(
+        { message: "You are not a member of this organization" },
+        { status: 403 }
+      );
+    }
+
+    if (membership.role !== Role.ADMIN) {
+      return NextResponse.json(
+        { message: "You do not have permission to delete this organization" },
+        { status: 403 }
+      );
+    }
+
+    await db.organization.delete({
+      where: {
+        id: organizationId,
+      },
+    });
+
+    return NextResponse.json({ message: "Organization deleted successfully" });
+  } catch (error) {
+    console.error("[ORGANIZATION_DELETE]", error);
+    return new NextResponse("Internal error", { status: 500 });
   }
 } 
