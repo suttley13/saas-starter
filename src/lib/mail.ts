@@ -10,21 +10,45 @@ type SendMailOptions = {
   templateParams?: Record<string, string>;
 };
 
-// Initialize EmailJS with your public key
-// You should set these in your .env.local file
-const EMAILJS_PUBLIC_KEY = process.env.NEXT_PUBLIC_EMAILJS_PUBLIC_KEY || 'YOUR_PUBLIC_KEY';
-const EMAILJS_SERVICE_ID = process.env.NEXT_PUBLIC_EMAILJS_SERVICE_ID || 'service_butvin1';
-const EMAILJS_INVITATION_TEMPLATE_ID = process.env.NEXT_PUBLIC_EMAILJS_INVITATION_TEMPLATE_ID || 'YOUR_TEMPLATE_ID';
+/**
+ * Enhanced logging for email configurations
+ */
+export function logEmailConfig() {
+  const publicKey = process.env.NEXT_PUBLIC_EMAILJS_PUBLIC_KEY;
+  const serviceId = process.env.NEXT_PUBLIC_EMAILJS_SERVICE_ID;
+  const templateId = process.env.NEXT_PUBLIC_EMAILJS_INVITATION_TEMPLATE_ID;
+  
+  console.log('======= EMAIL CONFIGURATION =======');
+  console.log(`PUBLIC_KEY: ${publicKey ? '✅ Configured' : '❌ Missing'}`);
+  console.log(`SERVICE_ID: ${serviceId ? '✅ Configured' : '❌ Missing'}`);
+  console.log(`TEMPLATE_ID: ${templateId ? '✅ Configured' : '❌ Missing'}`);
+  console.log('==================================');
+  
+  return {
+    isConfigured: !!(publicKey && serviceId && templateId),
+    publicKey,
+    serviceId,
+    templateId
+  };
+}
 
 /**
  * Send an email using EmailJS
  */
 export async function sendMail({ to, subject, html, templateParams }: SendMailOptions): Promise<boolean> {
   try {
+    // Log email configuration
+    const config = logEmailConfig();
+    
+    if (!config.isConfigured) {
+      console.error('Email configuration is incomplete. Cannot send email.');
+      return false;
+    }
+    
     if (typeof window === 'undefined') {
-      // Server-side mock implementation
+      // Server-side implementation (logs only)
       console.log('====================================');
-      console.log(`SENDING EMAIL TO: ${to}`);
+      console.log(`📧 SERVER-SIDE EMAIL: Would send to ${to}`);
       console.log(`SUBJECT: ${subject}`);
       console.log(`CONTENT: ${html}`);
       if (templateParams) {
@@ -41,17 +65,31 @@ export async function sendMail({ to, subject, html, templateParams }: SendMailOp
       ...templateParams
     };
 
+    console.log('📧 Sending email via EmailJS to:', to);
+    console.log('With params:', JSON.stringify(params, null, 2));
+    
+    // Ensure EmailJS is initialized before sending
+    if (!emailjs.init) {
+      emailjs.init(config.publicKey || '');
+    }
+    
     const response = await emailjs.send(
-      EMAILJS_SERVICE_ID,
-      EMAILJS_INVITATION_TEMPLATE_ID,
-      params,
-      EMAILJS_PUBLIC_KEY
+      config.serviceId || '',
+      config.templateId || '',
+      params
     );
 
-    console.log('Email sent successfully:', response);
+    console.log('✅ Email sent successfully:', response);
     return true;
   } catch (error) {
-    console.error('Error sending email:', error);
+    console.error('❌ Error sending email:', error);
+    
+    // More detailed error information
+    if (error instanceof Error) {
+      console.error('Error details:', error.message);
+      console.error('Stack trace:', error.stack);
+    }
+    
     return false;
   }
 }

@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Role } from "@prisma/client";
-import { initEmailJS, sendInvitationEmail } from "@/lib/email";
+import { sendInvitationEmail } from "@/lib/mail";
 
 const inviteSchema = z.object({
   email: z.string().email({ message: "Please enter a valid email address" }),
@@ -31,9 +31,8 @@ export function InviteMemberForm({ organizationId }: InviteMemberFormProps) {
   const [success, setSuccess] = useState<string | null>(null);
   const [organizationName, setOrganizationName] = useState("");
 
-  // Initialize EmailJS and fetch org details
+  // Fetch organization details to get the name
   useEffect(() => {
-    initEmailJS();
     fetchOrganizationDetails();
   }, [organizationId]);
 
@@ -88,16 +87,14 @@ export function InviteMemberForm({ organizationId }: InviteMemberFormProps) {
 
       const responseData = await response.json();
       
-      // Send invitation email if token is available
-      if (responseData.token) {
-        const emailSent = await sendInvitationEmail(data.email, responseData.token, organizationName);
-        if (!emailSent) {
-          toast.error("Invitation created but email failed to send. Please try again.");
-        }
-      }
-
+      // Show response status regarding email
       setSuccess(`Invitation sent to ${data.email}`);
-      toast.success(`Invitation sent to ${data.email}`);
+      if (responseData.emailStatus === "failed") {
+        toast.warning(`Invitation created but email could not be sent to ${data.email}. Please check your email configuration.`);
+      } else {
+        toast.success(`Invitation sent to ${data.email}`);
+      }
+      
       reset();
       router.refresh();
     } catch (error) {

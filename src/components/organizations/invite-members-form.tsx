@@ -7,7 +7,7 @@ import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { format } from "date-fns";
-import { initEmailJS, sendInvitationEmail } from "@/lib/email";
+import { logEmailConfig } from "@/lib/mail";
 
 // Define the invitation schema
 const invitationSchema = z.object({
@@ -55,11 +55,15 @@ export function InviteMembersForm({ organizationId }: InviteMembersFormProps) {
     },
   });
 
-  // Load existing invitations and organization info when the component mounts
+  // Initialize email configuration and fetch invitations when component mounts
   useEffect(() => {
     fetchInvitations();
     fetchOrganizationDetails();
-    initEmailJS();
+    // Log email configuration for debugging
+    const emailConfig = logEmailConfig();
+    if (!emailConfig.isConfigured) {
+      console.warn("Email configuration is incomplete - invitations may not send emails properly");
+    }
   }, [organizationId]);
 
   // Fetch organization details
@@ -121,15 +125,6 @@ export function InviteMembersForm({ organizationId }: InviteMembersFormProps) {
     }
   };
 
-  // Replace the existing sendInvitationEmail function with a call to our utility
-  const handleSendInvitationEmail = async (email: string, token: string) => {
-    const success = await sendInvitationEmail(email, token, organizationName);
-    if (!success) {
-      toast.error("Invitation created but email failed to send. Please try again.");
-    }
-    return success;
-  };
-
   // Handle form submission
   const onSubmit = async (data: InvitationFormValues) => {
     try {
@@ -154,14 +149,15 @@ export function InviteMembersForm({ organizationId }: InviteMembersFormProps) {
       
       const responseData = await response.json();
       
-      // Send the invitation email if an invitation was created
-      if (responseData.invitation) {
-        await handleSendInvitationEmail(data.email, responseData.invitation.token);
+      // Handle response and check if email was sent
+      if (responseData.emailStatus === "failed") {
+        toast.warning(`Invitation created for ${data.email} but email could not be sent. Please check your email configuration.`);
+      } else {
+        toast.success(`Invitation sent successfully to ${data.email}`);
       }
       
       // Reset form
       reset();
-      toast.success("Invitation sent successfully");
       
       // Refresh invitations list
       fetchInvitations();

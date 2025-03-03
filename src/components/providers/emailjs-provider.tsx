@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import emailjs from "@emailjs/browser";
+import { logEmailConfig } from "@/lib/mail";
 
 // Initialize EmailJS with your public key
 export function EmailJSProvider() {
@@ -19,22 +20,23 @@ export function EmailJSProvider() {
       }
       
       try {
+        // Initialize EmailJS
         emailjs.init(publicKey);
-        console.log('EmailJS initialized successfully');
+        console.log('EmailJS initialized successfully on client');
         
-        // Log service and template info for debugging
-        const serviceId = process.env.NEXT_PUBLIC_EMAILJS_SERVICE_ID;
-        const templateId = process.env.NEXT_PUBLIC_EMAILJS_INVITATION_TEMPLATE_ID;
+        // Use the shared logging function
+        const config = logEmailConfig();
         
-        if (!serviceId || serviceId === "your_emailjs_service_id") {
-          console.warn('EmailJS Warning: Service ID not properly configured');
-        }
-        
-        if (!templateId || templateId === "your_invitation_template_id") {
-          console.warn('EmailJS Warning: Template ID not properly configured');
+        if (!config.isConfigured) {
+          console.warn('⚠️ EmailJS is initialized but configuration is incomplete. Emails may not be sent correctly.');
+        } else {
+          console.log('✅ EmailJS is fully configured and ready to send emails');
         }
       } catch (error) {
         console.error('Error initializing EmailJS:', error);
+        if (error instanceof Error) {
+          console.error('Error details:', error.message);
+        }
       }
     }
   }, []);

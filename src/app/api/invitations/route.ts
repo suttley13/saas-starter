@@ -6,7 +6,7 @@ import { addDays } from "date-fns";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth/auth";
 import { Role } from "@prisma/client";
-import { sendInvitationEmail } from "@/lib/mail";
+import { sendInvitationEmail, logEmailConfig } from "@/lib/mail";
 
 // Input validation schema
 const invitationSchema = z.object({
@@ -129,16 +129,25 @@ export async function POST(req: Request) {
       ? `${baseUrl.replace(/:\d+$/, '')}/invitations/${token}`
       : `${baseUrl}/invitations/${token}`;
 
+    // Log email configuration before sending
+    console.log(`Attempting to send invitation email to ${email} for organization ${organization.name}`);
+    logEmailConfig();
+    
     // Send invitation email
-    await sendInvitationEmail({
+    const emailSent = await sendInvitationEmail({
       email,
       organizationName: organization.name,
       inviteLink,
     });
 
+    if (!emailSent) {
+      console.warn(`Failed to send invitation email to ${email}, but invitation was created`);
+    }
+
     return NextResponse.json(
       { 
-        message: "Invitation sent successfully", 
+        message: emailSent ? "Invitation sent successfully" : "Invitation created but email could not be sent",
+        emailStatus: emailSent ? "sent" : "failed",
         invitation: {
           id: invitation.id,
           email: invitation.email,
