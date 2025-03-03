@@ -1,10 +1,10 @@
 // This is a placeholder mail utility
 // In a production app, you would integrate with a real email service like Sendgrid, Mailgun, etc.
 
-// Email utility using Resend
-// https://resend.com/docs/sdks/node
+// Email utility using EmailJS
+// https://www.emailjs.com/docs/sdk/installation/
 
-import { Resend } from 'resend';
+import emailjs from '@emailjs/browser';
 
 type SendMailOptions = {
   to: string;
@@ -17,32 +17,29 @@ type SendMailOptions = {
  * Enhanced logging for email configurations
  */
 export function logEmailConfig() {
-  const resendApiKey = process.env.RESEND_API_KEY;
-  const fromEmail = process.env.NEXT_PUBLIC_EMAIL_FROM || 'onboarding@resend.dev';
+  const publicKey = process.env.NEXT_PUBLIC_EMAILJS_PUBLIC_KEY;
+  const serviceId = process.env.NEXT_PUBLIC_EMAILJS_SERVICE_ID || 'service_g8lidnk'; // Use the provided service ID
+  const templateId = process.env.NEXT_PUBLIC_EMAILJS_INVITATION_TEMPLATE_ID;
   
-  console.log('======= EMAIL CONFIGURATION IN MAIL.TS =======');
-  console.log(`RESEND_API_KEY exists: ${!!resendApiKey}`);
-  
-  // Show more details if debug is enabled
-  if (process.env.NEXT_PUBLIC_DEBUG_EMAIL === 'true' && resendApiKey) {
-    // Only show first few characters for security
-    console.log(`RESEND_API_KEY preview: ${resendApiKey.substring(0, 8)}...`);
-  }
-  
-  console.log(`FROM_EMAIL: ${fromEmail}`);
+  console.log('======= EMAILJS CONFIGURATION =======');
+  console.log(`PUBLIC_KEY: ${publicKey ? '✅ Configured' : '❌ Missing'}`);
+  console.log(`SERVICE_ID: ${serviceId ? '✅ Configured' : '❌ Missing'}`);
+  console.log(`TEMPLATE_ID: ${templateId ? '✅ Configured' : '❌ Missing'}`);
   console.log(`Running on: ${typeof window !== 'undefined' ? 'Client-side' : 'Server-side'}`);
-  console.log('==============================================');
+  console.log('=====================================');
   
   return {
-    isConfigured: !!resendApiKey,
-    fromEmail
+    isConfigured: !!(publicKey && serviceId && templateId),
+    publicKey,
+    serviceId,
+    templateId
   };
 }
 
 /**
- * Send an email using Resend
+ * Send an email using EmailJS
  */
-export async function sendMail({ to, subject, html }: SendMailOptions): Promise<boolean> {
+export async function sendMail({ to, subject, html, templateParams }: SendMailOptions): Promise<boolean> {
   try {
     // Log email configuration
     const config = logEmailConfig();
@@ -52,78 +49,58 @@ export async function sendMail({ to, subject, html }: SendMailOptions): Promise<
       return false;
     }
     
-    // Client-side implementation (redirect to server API)
-    if (typeof window !== 'undefined') {
-      console.log('📧 Client-side: Sending email via API to:', to);
-      
-      try {
-        // Call your server API to send email
-        const response = await fetch('/api/send-email', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            to,
-            subject,
-            html,
-          }),
-        });
-        
-        // Parse the JSON response (with error handling)
-        let result;
-        try {
-          result = await response.json();
-        } catch (jsonError) {
-          console.error('Error parsing API response:', jsonError);
-          result = { error: 'Invalid API response' };
-        }
-        
-        // Check for API errors
-        if (!response.ok) {
-          const errorMessage = result?.error || `Failed to send email: ${response.status}`;
-          console.error('API error:', errorMessage);
-          throw new Error(errorMessage);
-        }
-        
-        console.log('✅ Email API call successful:', result);
-        return true;
-      } catch (apiError) {
-        console.error('❌ Error calling email API:', apiError);
-        if (apiError instanceof Error) {
-          console.error('Error details:', apiError.message);
-        }
-        return false;
+    // Server-side implementation (log only)
+    if (typeof window === 'undefined') {
+      console.log('====================================');
+      console.log(`📧 SERVER-SIDE EMAIL: Would send to ${to}`);
+      console.log(`SUBJECT: ${subject}`);
+      console.log(`CONTENT: ${html}`);
+      if (templateParams) {
+        console.log(`TEMPLATE PARAMS: ${JSON.stringify(templateParams, null, 2)}`);
       }
-    }
-    
-    // Server-side implementation using Resend
-    if (typeof process !== 'undefined') {
-      const resendApiKey = process.env.RESEND_API_KEY;
-      
-      if (!resendApiKey) {
-        console.error('❌ Server-side: RESEND_API_KEY is not configured');
-        return false;
-      }
-      
-      const resend = new Resend(resendApiKey);
-      
-      console.log('📧 Server-side: Sending email via Resend to:', to);
-      
-      const data = await resend.emails.send({
-        from: config.fromEmail,
-        to,
-        subject,
-        html,
-      });
-      
-      console.log('✅ Email sent successfully:', data);
+      console.log('====================================');
+      // Server-side can't use EmailJS directly (browser-only)
       return true;
     }
     
-    return false;
+    // Client-side EmailJS implementation
+    const params = {
+      to_email: to,
+      subject,
+      ...templateParams
+    };
+    
+    console.log('📧 Sending email via EmailJS to:', to);
+    console.log('With params:', JSON.stringify(params, null, 2));
+    
+    // Send email using EmailJS
+    try {
+      // Make sure EmailJS is initialized
+      if (typeof emailjs.init === 'function' && config.publicKey) {
+        try {
+          emailjs.init(config.publicKey);
+        } catch (initError) {
+          console.warn('EmailJS may already be initialized:', initError);
+        }
+      }
+      
+      const response = await emailjs.send(
+        config.serviceId || '',
+        config.templateId || '',
+        params
+      );
+      
+      console.log('✅ Email sent successfully:', response);
+      return true;
+    } catch (emailjsError) {
+      console.error('❌ Error sending email with EmailJS:', emailjsError);
+      if (emailjsError instanceof Error) {
+        console.error('Error details:', emailjsError.message);
+      }
+      return false;
+    }
   } catch (error) {
-    console.error('❌ Error sending email:', error);
+    console.error('❌ Error in sendMail function:', error);
     
     // More detailed error information
     if (error instanceof Error) {
@@ -149,7 +126,7 @@ export async function sendInvitationEmail({
 }): Promise<boolean> {
   const subject = `You're invited to join ${organizationName}`;
   
-  // Generate HTML for email
+  // Generate HTML for fallback server-side logging
   const html = `
     <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
       <h1 style="color: #2563eb; margin-bottom: 24px;">You're invited!</h1>
@@ -171,9 +148,16 @@ export async function sendInvitationEmail({
     </div>
   `;
   
+  // Template params for EmailJS
+  const templateParams = {
+    organization_name: organizationName,
+    invite_link: inviteLink
+  };
+  
   return sendMail({ 
     to: email, 
     subject, 
-    html
+    html, 
+    templateParams 
   });
 } 
