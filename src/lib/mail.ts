@@ -29,7 +29,8 @@ export function logEmailConfig() {
   console.log('=====================================');
   
   return {
-    isConfigured: !!(publicKey && serviceId && templateId),
+    isConfigured: !!(serviceId), // Only require serviceId for now
+    hasFullConfig: !!(publicKey && serviceId && templateId),
     publicKey,
     serviceId,
     templateId
@@ -44,11 +45,6 @@ export async function sendMail({ to, subject, html, templateParams }: SendMailOp
     // Log email configuration
     const config = logEmailConfig();
     
-    if (!config.isConfigured) {
-      console.error('Email configuration is incomplete. Cannot send email.');
-      return false;
-    }
-    
     // Server-side implementation (log only)
     if (typeof window === 'undefined') {
       console.log('====================================');
@@ -59,8 +55,26 @@ export async function sendMail({ to, subject, html, templateParams }: SendMailOp
         console.log(`TEMPLATE PARAMS: ${JSON.stringify(templateParams, null, 2)}`);
       }
       console.log('====================================');
-      // Server-side can't use EmailJS directly (browser-only)
-      return true;
+      return true; // Server-side always "succeeds" since we just log
+    }
+    
+    // Check for minimal configuration
+    if (!config.serviceId) {
+      console.error('Email service ID is missing. Cannot send email.');
+      return false;
+    }
+    
+    // If we're missing template ID or public key, log a warning but allow
+    // the invitation creation to proceed
+    if (!config.hasFullConfig) {
+      console.warn('⚠️ EmailJS is not fully configured. Emails will not be sent.');
+      console.warn('Missing configuration:', 
+        !config.publicKey ? 'Public Key, ' : '',
+        !config.templateId ? 'Template ID, ' : '');
+      console.warn('Invitation will be created but email will not be sent.');
+      
+      // Return false to indicate email wasn't sent, but allow invitation creation
+      return false;
     }
     
     // Client-side EmailJS implementation
