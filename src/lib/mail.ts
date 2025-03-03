@@ -20,10 +20,18 @@ export function logEmailConfig() {
   const resendApiKey = process.env.RESEND_API_KEY;
   const fromEmail = process.env.NEXT_PUBLIC_EMAIL_FROM || 'onboarding@resend.dev';
   
-  console.log('======= EMAIL CONFIGURATION =======');
-  console.log(`RESEND_API_KEY: ${resendApiKey ? '✅ Configured' : '❌ Missing'}`);
+  console.log('======= EMAIL CONFIGURATION IN MAIL.TS =======');
+  console.log(`RESEND_API_KEY exists: ${!!resendApiKey}`);
+  
+  // Show more details if debug is enabled
+  if (process.env.NEXT_PUBLIC_DEBUG_EMAIL === 'true' && resendApiKey) {
+    // Only show first few characters for security
+    console.log(`RESEND_API_KEY preview: ${resendApiKey.substring(0, 8)}...`);
+  }
+  
   console.log(`FROM_EMAIL: ${fromEmail}`);
-  console.log('==================================');
+  console.log(`Running on: ${typeof window !== 'undefined' ? 'Client-side' : 'Server-side'}`);
+  console.log('==============================================');
   
   return {
     isConfigured: !!resendApiKey,
@@ -62,12 +70,12 @@ export async function sendMail({ to, subject, html }: SendMailOptions): Promise<
           }),
         });
         
-        const result = await response.json();
-        
         if (!response.ok) {
-          throw new Error(result.error || 'Failed to send email');
+          const result = await response.json().catch(() => ({}));
+          throw new Error(result.error || `Failed to send email: ${response.status}`);
         }
         
+        const result = await response.json();
         console.log('✅ Email API call successful:', result);
         return true;
       } catch (apiError) {
@@ -78,7 +86,14 @@ export async function sendMail({ to, subject, html }: SendMailOptions): Promise<
     
     // Server-side implementation using Resend
     if (typeof process !== 'undefined') {
-      const resend = new Resend(process.env.RESEND_API_KEY);
+      const resendApiKey = process.env.RESEND_API_KEY;
+      
+      if (!resendApiKey) {
+        console.error('❌ Server-side: RESEND_API_KEY is not configured');
+        return false;
+      }
+      
+      const resend = new Resend(resendApiKey);
       
       console.log('📧 Server-side: Sending email via Resend to:', to);
       
