@@ -70,16 +70,29 @@ export async function sendMail({ to, subject, html }: SendMailOptions): Promise<
           }),
         });
         
-        if (!response.ok) {
-          const result = await response.json().catch(() => ({}));
-          throw new Error(result.error || `Failed to send email: ${response.status}`);
+        // Parse the JSON response (with error handling)
+        let result;
+        try {
+          result = await response.json();
+        } catch (jsonError) {
+          console.error('Error parsing API response:', jsonError);
+          result = { error: 'Invalid API response' };
         }
         
-        const result = await response.json();
+        // Check for API errors
+        if (!response.ok) {
+          const errorMessage = result?.error || `Failed to send email: ${response.status}`;
+          console.error('API error:', errorMessage);
+          throw new Error(errorMessage);
+        }
+        
         console.log('✅ Email API call successful:', result);
         return true;
       } catch (apiError) {
         console.error('❌ Error calling email API:', apiError);
+        if (apiError instanceof Error) {
+          console.error('Error details:', apiError.message);
+        }
         return false;
       }
     }
