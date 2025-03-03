@@ -1,7 +1,10 @@
 // This is a placeholder mail utility
 // In a production app, you would integrate with a real email service like Sendgrid, Mailgun, etc.
 
-import emailjs from '@emailjs/browser';
+// Email utility using Resend
+// https://resend.com/docs/sdks/node
+
+import { Resend } from 'resend';
 
 type SendMailOptions = {
   to: string;
@@ -14,28 +17,24 @@ type SendMailOptions = {
  * Enhanced logging for email configurations
  */
 export function logEmailConfig() {
-  const publicKey = process.env.NEXT_PUBLIC_EMAILJS_PUBLIC_KEY;
-  const serviceId = process.env.NEXT_PUBLIC_EMAILJS_SERVICE_ID;
-  const templateId = process.env.NEXT_PUBLIC_EMAILJS_INVITATION_TEMPLATE_ID;
+  const resendApiKey = process.env.RESEND_API_KEY;
+  const fromEmail = process.env.NEXT_PUBLIC_EMAIL_FROM || 'onboarding@resend.dev';
   
   console.log('======= EMAIL CONFIGURATION =======');
-  console.log(`PUBLIC_KEY: ${publicKey ? '✅ Configured' : '❌ Missing'}`);
-  console.log(`SERVICE_ID: ${serviceId ? '✅ Configured' : '❌ Missing'}`);
-  console.log(`TEMPLATE_ID: ${templateId ? '✅ Configured' : '❌ Missing'}`);
+  console.log(`RESEND_API_KEY: ${resendApiKey ? '✅ Configured' : '❌ Missing'}`);
+  console.log(`FROM_EMAIL: ${fromEmail}`);
   console.log('==================================');
   
   return {
-    isConfigured: !!(publicKey && serviceId && templateId),
-    publicKey,
-    serviceId,
-    templateId
+    isConfigured: !!resendApiKey,
+    fromEmail
   };
 }
 
 /**
- * Send an email using EmailJS
+ * Send an email using Resend
  */
-export async function sendMail({ to, subject, html, templateParams }: SendMailOptions): Promise<boolean> {
+export async function sendMail({ to, subject, html }: SendMailOptions): Promise<boolean> {
   try {
     // Log email configuration
     const config = logEmailConfig();
@@ -45,44 +44,56 @@ export async function sendMail({ to, subject, html, templateParams }: SendMailOp
       return false;
     }
     
-    if (typeof window === 'undefined') {
-      // Server-side implementation (logs only)
-      console.log('====================================');
-      console.log(`📧 SERVER-SIDE EMAIL: Would send to ${to}`);
-      console.log(`SUBJECT: ${subject}`);
-      console.log(`CONTENT: ${html}`);
-      if (templateParams) {
-        console.log(`TEMPLATE PARAMS: ${JSON.stringify(templateParams, null, 2)}`);
+    // Client-side implementation (redirect to server API)
+    if (typeof window !== 'undefined') {
+      console.log('📧 Client-side: Sending email via API to:', to);
+      
+      try {
+        // Call your server API to send email
+        const response = await fetch('/api/send-email', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            to,
+            subject,
+            html,
+          }),
+        });
+        
+        const result = await response.json();
+        
+        if (!response.ok) {
+          throw new Error(result.error || 'Failed to send email');
+        }
+        
+        console.log('✅ Email API call successful:', result);
+        return true;
+      } catch (apiError) {
+        console.error('❌ Error calling email API:', apiError);
+        return false;
       }
-      console.log('====================================');
+    }
+    
+    // Server-side implementation using Resend
+    if (typeof process !== 'undefined') {
+      const resend = new Resend(process.env.RESEND_API_KEY);
+      
+      console.log('📧 Server-side: Sending email via Resend to:', to);
+      
+      const data = await resend.emails.send({
+        from: config.fromEmail,
+        to,
+        subject,
+        html,
+      });
+      
+      console.log('✅ Email sent successfully:', data);
       return true;
     }
-
-    // Client-side EmailJS implementation
-    const params = {
-      to_email: to,
-      subject: subject,
-      ...templateParams
-    };
-
-    console.log('📧 Sending email via EmailJS to:', to);
-    console.log('With params:', JSON.stringify(params, null, 2));
     
-    // Ensure EmailJS is initialized before sending
-    // NOTE: We don't need to re-initialize EmailJS here as it's already initialized in EmailJSProvider
-    // If not initialized, log a warning
-    if (!config.publicKey) {
-      console.warn('EmailJS public key is missing. Cannot send email properly.');
-    }
-    
-    const response = await emailjs.send(
-      config.serviceId || '',
-      config.templateId || '',
-      params
-    );
-
-    console.log('✅ Email sent successfully:', response);
-    return true;
+    return false;
   } catch (error) {
     console.error('❌ Error sending email:', error);
     
@@ -110,38 +121,31 @@ export async function sendInvitationEmail({
 }): Promise<boolean> {
   const subject = `You're invited to join ${organizationName}`;
   
-  // Generate HTML for fallback server-side logging
+  // Generate HTML for email
   const html = `
     <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
-      <h1 style="color: #3b82f6; margin-bottom: 24px;">You're invited!</h1>
-      <p style="margin-bottom: 16px;">
+      <h1 style="color: #2563eb; margin-bottom: 24px;">You're invited!</h1>
+      <p style="margin-bottom: 16px; color: #1e293b; font-size: 16px;">
         You've been invited to join <strong>${organizationName}</strong> on our SaaS platform.
       </p>
-      <p style="margin-bottom: 32px;">
+      <p style="margin-bottom: 32px; color: #1e293b; font-size: 16px;">
         Click the link below to accept the invitation and get started:
       </p>
       <a 
         href="${inviteLink}" 
-        style="background-color: #3b82f6; color: white; padding: 12px 24px; border-radius: 4px; text-decoration: none; display: inline-block; margin-bottom: 32px;"
+        style="background-color: #2563eb; color: white; padding: 12px 24px; border-radius: 4px; text-decoration: none; display: inline-block; margin-bottom: 32px; font-weight: bold;"
       >
         Accept Invitation
       </a>
-      <p style="color: #64748b; font-size: 14px;">
+      <p style="color: #334155; font-size: 14px;">
         If you didn't expect this invitation, you can safely ignore this email.
       </p>
     </div>
   `;
   
-  // Template params for EmailJS
-  const templateParams = {
-    organization_name: organizationName,
-    invite_link: inviteLink
-  };
-  
   return sendMail({ 
     to: email, 
     subject, 
-    html, 
-    templateParams 
+    html
   });
 } 
