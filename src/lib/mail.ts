@@ -69,8 +69,10 @@ export async function sendMail({ to, subject, html, templateParams }: SendMailOp
     console.log('With params:', JSON.stringify(params, null, 2));
     
     // Ensure EmailJS is initialized before sending
-    if (!emailjs.init) {
-      emailjs.init(config.publicKey || '');
+    // NOTE: We don't need to re-initialize EmailJS here as it's already initialized in EmailJSProvider
+    // If not initialized, log a warning
+    if (!config.publicKey) {
+      console.warn('EmailJS public key is missing. Cannot send email properly.');
     }
     
     const response = await emailjs.send(
