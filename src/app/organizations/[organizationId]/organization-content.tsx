@@ -168,7 +168,7 @@ export default function OrganizationContent({
               <h2 className="text-xl font-semibold text-slate-800">Team Members</h2>
               {isAdmin && (
                 <Link href={`/organizations/${organization.id}/invite`}>
-                  <Button size="sm" className="bg-blue-600 hover:bg-blue-700 transition-colors">
+                  <Button size="sm" className="text-white bg-gradient-to-r from-blue-500 via-blue-600 to-blue-700 hover:bg-gradient-to-br focus:ring-4 focus:outline-none focus:ring-blue-300 dark:focus:ring-blue-800 font-medium rounded-lg">
                     Invite Members
                   </Button>
                 </Link>
