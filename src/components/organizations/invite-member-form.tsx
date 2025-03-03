@@ -112,7 +112,11 @@ export function InviteMemberForm({ organizationId }: InviteMemberFormProps) {
         </div>
         {error && <p className="text-sm text-red-500">{error}</p>}
         {success && <p className="text-sm text-green-500">{success}</p>}
-        <Button type="submit" disabled={isLoading}>
+        <Button 
+          type="submit" 
+          disabled={isLoading}
+          className="text-white bg-gradient-to-r from-blue-500 via-blue-600 to-blue-700 hover:bg-gradient-to-br focus:ring-4 focus:outline-none focus:ring-blue-300 dark:focus:ring-blue-800 font-medium rounded-lg"
+        >
           {isLoading ? "Sending..." : "Send Invitation"}
         </Button>
       </form>

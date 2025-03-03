@@ -254,8 +254,8 @@ export function InviteMembersForm({ organizationId }: InviteMembersFormProps) {
           
           <Button 
             type="submit" 
-            className="bg-blue-600 hover:bg-blue-700 transition-colors mt-2"
             disabled={isLoading}
+            className="text-white bg-gradient-to-r from-blue-500 via-blue-600 to-blue-700 hover:bg-gradient-to-br focus:ring-4 focus:outline-none focus:ring-blue-300 dark:focus:ring-blue-800 font-medium rounded-lg mt-2"
           >
             {isLoading ? "Sending..." : "Send Invitation"}
           </Button>
