@@ -1,15 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Role } from "@prisma/client";
+import { initEmailJS, sendInvitationEmail } from "@/lib/email";
 
 const inviteSchema = z.object({
   email: z.string().email({ message: "Please enter a valid email address" }),
@@ -27,6 +29,27 @@ export function InviteMemberForm({ organizationId }: InviteMemberFormProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [organizationName, setOrganizationName] = useState("");
+
+  // Initialize EmailJS and fetch org details
+  useEffect(() => {
+    initEmailJS();
+    fetchOrganizationDetails();
+  }, [organizationId]);
+
+  // Fetch organization details to get the name
+  const fetchOrganizationDetails = async () => {
+    try {
+      const response = await fetch(`/api/organizations/${organizationId}`);
+      if (!response.ok) {
+        throw new Error("Failed to fetch organization details");
+      }
+      const data = await response.json();
+      setOrganizationName(data.name);
+    } catch (error) {
+      console.error("Error fetching organization details:", error);
+    }
+  };
 
   const {
     register,
@@ -59,15 +82,28 @@ export function InviteMemberForm({ organizationId }: InviteMemberFormProps) {
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || "Something went wrong");
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Something went wrong");
+      }
+
+      const responseData = await response.json();
+      
+      // Send invitation email if token is available
+      if (responseData.token) {
+        const emailSent = await sendInvitationEmail(data.email, responseData.token, organizationName);
+        if (!emailSent) {
+          toast.error("Invitation created but email failed to send. Please try again.");
+        }
       }
 
       setSuccess(`Invitation sent to ${data.email}`);
+      toast.success(`Invitation sent to ${data.email}`);
       reset();
       router.refresh();
     } catch (error) {
-      setError(error instanceof Error ? error.message : "Something went wrong");
+      const errorMessage = error instanceof Error ? error.message : "Something went wrong";
+      setError(errorMessage);
+      toast.error(errorMessage);
     } finally {
       setIsLoading(false);
     }

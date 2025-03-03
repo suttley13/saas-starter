@@ -7,7 +7,7 @@ import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { format } from "date-fns";
-import emailjs from "@emailjs/browser";
+import { initEmailJS, sendInvitationEmail } from "@/lib/email";
 
 // Define the invitation schema
 const invitationSchema = z.object({
@@ -59,6 +59,7 @@ export function InviteMembersForm({ organizationId }: InviteMembersFormProps) {
   useEffect(() => {
     fetchInvitations();
     fetchOrganizationDetails();
+    initEmailJS();
   }, [organizationId]);
 
   // Fetch organization details
@@ -120,54 +121,21 @@ export function InviteMembersForm({ organizationId }: InviteMembersFormProps) {
     }
   };
 
-  // Send email directly from client
-  const sendInvitationEmail = async (email: string, token: string) => {
-    try {
-      // Use window.location.origin to get the current domain and port dynamically
-      // This ensures the link works for whatever server is currently running
-      const baseUrl = window.location.origin;
-      const inviteLink = `${baseUrl}/invitations/${token}`;
-      
-      const templateParams = {
-        to_email: email,
-        subject: `You're invited to join ${organizationName}`,
-        organization_name: organizationName,
-        invite_link: inviteLink
-      };
-      
-      const serviceId = process.env.NEXT_PUBLIC_EMAILJS_SERVICE_ID || "";
-      const templateId = process.env.NEXT_PUBLIC_EMAILJS_INVITATION_TEMPLATE_ID || "";
-      const publicKey = process.env.NEXT_PUBLIC_EMAILJS_PUBLIC_KEY || "";
-      
-      console.log("EmailJS Config:", { 
-        serviceId, 
-        templateId, 
-        publicKey: publicKey ? "[PRESENT]" : "[MISSING]", 
-        templateParams 
-      });
-      
-      const response = await emailjs.send(
-        serviceId,
-        templateId,
-        templateParams,
-        publicKey
-      );
-      
-      console.log("Email sent successfully:", response);
-      return true;
-    } catch (error) {
-      console.error("Error sending email via EmailJS:", error);
+  // Replace the existing sendInvitationEmail function with a call to our utility
+  const handleSendInvitationEmail = async (email: string, token: string) => {
+    const success = await sendInvitationEmail(email, token, organizationName);
+    if (!success) {
       toast.error("Invitation created but email failed to send. Please try again.");
-      return false;
     }
+    return success;
   };
 
   // Handle form submission
   const onSubmit = async (data: InvitationFormValues) => {
-    setIsLoading(true);
-    setError(null);
-    
     try {
+      setIsLoading(true);
+      setError("");
+      
       const response = await fetch("/api/invitations", {
         method: "POST",
         headers: {
@@ -175,7 +143,7 @@ export function InviteMembersForm({ organizationId }: InviteMembersFormProps) {
         },
         body: JSON.stringify({
           ...data,
-          organizationId,
+          organizationId
         }),
       });
       
@@ -186,12 +154,12 @@ export function InviteMembersForm({ organizationId }: InviteMembersFormProps) {
       
       const responseData = await response.json();
       
-      // Send the email from the client side
+      // Send the invitation email if an invitation was created
       if (responseData.invitation) {
-        await sendInvitationEmail(data.email, responseData.invitation.token);
+        await handleSendInvitationEmail(data.email, responseData.invitation.token);
       }
       
-      // Reset form and show success message
+      // Reset form
       reset();
       toast.success("Invitation sent successfully");
       
@@ -199,7 +167,7 @@ export function InviteMembersForm({ organizationId }: InviteMembersFormProps) {
       fetchInvitations();
     } catch (error) {
       console.error("Error sending invitation:", error);
-      setError(error instanceof Error ? error.message : "An error occurred");
+      setError(error instanceof Error ? error.message : "Failed to send invitation");
       toast.error(error instanceof Error ? error.message : "Failed to send invitation");
     } finally {
       setIsLoading(false);
