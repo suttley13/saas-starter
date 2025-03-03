@@ -57,13 +57,33 @@ export function OrganizationSettingsForm({ organization }: OrganizationSettingsF
   };
 
   const handleSave = async (field: 'name' | 'slug') => {
-    // This would be implemented to save the changes to the database
-    toast.success(`Organization ${field} updated successfully!`);
-    setIsEditing({
-      ...isEditing,
-      [field]: false,
-    });
-    router.refresh();
+    try {
+      // Call the API to update the organization details
+      const response = await fetch(`/api/organizations/${organization.id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          [field]: formValues[field]
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `Failed to update organization ${field}`);
+      }
+
+      toast.success(`Organization ${field} updated successfully!`);
+      setIsEditing({
+        ...isEditing,
+        [field]: false,
+      });
+      router.refresh();
+    } catch (error) {
+      console.error(`Error updating organization ${field}:`, error);
+      toast.error(error instanceof Error ? error.message : `Failed to update organization ${field}`);
+    }
   };
 
   const handleDelete = async () => {
